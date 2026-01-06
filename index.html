@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Barcode → Open Food Facts</title>
+  <style>
+    :root{
+      --bg:#0f1724;
+      --card:#0b1220;
+      --muted:#94a3b8;
+      --accent:#06b6d4;
+      --glass: rgba(255,255,255,0.03);
+      color-scheme: dark;
+    }
+    html,body{height:100%;margin:0;font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;}
+    body{
+      background: linear-gradient(180deg,#071026 0%, #0b1220 100%);
+      display:flex;align-items:center;justify-content:center;padding:24px;
+      color:#e6eef6;
+    }
+    .app{
+      width:100%;max-width:980px;border-radius:12px;padding:18px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      box-shadow: 0 6px 30px rgba(2,6,23,0.6);backdrop-filter: blur(6px);
+    }
+    header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+    header h1{font-size:18px;margin:0;font-weight:600}
+    header p{margin:0;color:var(--muted);font-size:13px}
+    .layout{display:grid;grid-template-columns: 1fr 420px;gap:16px}
+    @media (max-width:960px){ .layout{grid-template-columns:1fr;}}
+    .scanner-card, .info-card{background:var(--card);border-radius:10px;padding:12px}
+    .video-wrap{position:relative;border-radius:8px;overflow:hidden;background:var(--glass);display:flex;align-items:center;justify-content:center;height:320px}
+    video{width:100%;height:100%;object-fit:cover;background:#000}
+    .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    button{background:transparent;border:1px solid rgba(255,255,255,0.06);color:inherit;padding:8px 10px;border-radius:8px;cursor:pointer;font-weight:600}
+    button.primary{background:linear-gradient(90deg,var(--accent),#0ea5a9);color:#042027;border:0}
+    .small{font-size:13px;padding:6px 8px}
+    input[type="text"]{background:transparent;border:1px solid rgba(255,255,255,0.04);padding:8px;border-radius:8px;color:inherit;min-width:180px}
+    .status{margin-top:8px;color:var(--muted);font-size:13px}
+    .result-image{width:100%;height:220px;object-fit:contain;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.02));border-radius:8px;padding:8px}
+    .meta{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
+    .badge{padding:6px 8px;border-radius:8px;background:rgba(255,255,255,0.03);font-weight:700}
+    .title{font-size:16px;font-weight:700;margin:0}
+    .sub{color:var(--muted);font-size:13px;margin:0}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+    .kv{background:rgba(255,255,255,0.02);padding:8px;border-radius:8px}
+    .kv b{display:block;font-size:13px;margin-bottom:6px}
+    .link{color:var(--accent);text-decoration:none;font-weight:700}
+    .placeholder{display:flex;align-items:center;justify-content:center;height:220px;color:var(--muted);font-size:14px}
+    footer{margin-top:12px;color:var(--muted);font-size:12px;text-align:right}
+  </style>
+</head>
+<body>
+  <div class="app" role="application" aria-label="Open Food Facts barcode lookup">
+    <header>
+      <div>
+        <h1>Barcode Scanner — Open Food Facts</h1>
+        <p>Scan a barcode or paste a GTIN/UPC/EAN to fetch product data from Open Food Facts.</p>
+      </div>
+    </header>
+
+    <div class="layout">
+      <section class="scanner-card" aria-labelledby="scanner">
+        <div id="scanner" class="video-wrap" aria-live="polite">
+          <video id="video" autoplay muted playsinline></video>
+          <div id="videoFallback" class="placeholder" style="display:none">Camera unavailable</div>
+        </div>
+
+        <div class="controls" role="group" aria-label="scanner controls">
+          <button id="startBtn" class="primary small">Start scanning</button>
+          <button id="stopBtn" class="small">Stop</button>
+          <input id="manualInput" type="text" placeholder="Enter barcode manually (EAN/UPC/GTIN)" aria-label="manual barcode input" />
+          <button id="manualLookup" class="small">Lookup</button>
+          <button id="flipBtn" class="small">Use back camera</button>
+        </div>
+
+        <div id="status" class="status">Ready.</div>
+      </section>
+
+      <aside class="info-card" aria-live="polite">
+        <div id="resultArea">
+          <div id="emptyState">
+            <div class="placeholder">No product loaded. Scan a barcode or paste one and press Lookup.</div>
+          </div>
+
+          <div id="productCard" style="display:none">
+            <img id="productImage" class="result-image" alt="product image" src="" />
+            <h2 id="productTitle" class="title"></h2>
+            <p id="brandRow" class="sub"></p>
+
+            <div class="meta" id="badges">
+              <!-- nutriscore, ecoscore, health score badges -->
+            </div>
+
+            <div class="grid" id="gridData">
+              <!-- key-value boxes -->
+            </div>
+
+            <p id="ingredients" class="sub" style="margin-top:10px"></p>
+            <p id="allergens" class="sub" style="margin-top:6px"></p>
+
+            <p style="margin-top:10px">
+              <a id="productUrl" class="link" target="_blank" rel="noopener">Open on Open Food Facts</a>
+            </p>
+          </div>
+        </div>
+
+        <footer>Data from Open Food Facts • <span id="lastFetched" style="margin-left:6px"></span></footer>
+      </aside>
+    </div>
+  </div>
+
+  <script type="module">
+    // Imports (using unpkg CDN). This uses @zxing/browser to decode barcodes from the camera.
+    import { BrowserMultiFormatReader, NotFoundException } from 'https://unpkg.com/@zxing/browser@0.0.11/esm/index.js';
+
+    const video = document.getElementById('video');
+    const videoFallback = document.getElementById('videoFallback');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const flipBtn = document.getElementById('flipBtn');
+    const manualInput = document.getElementById('manualInput');
+    const manualLookup = document.getElementById('manualLookup');
+    const status = document.getElementById('status');
+
+    const productCard = document.getElementById('productCard');
+    const emptyState = document.getElementById('emptyState');
+    const productImage = document.getElementById('productImage');
+    const productTitle = document.getElementById('productTitle');
+    const brandRow = document.getElementById('brandRow');
+    const badges = document.getElementById('badges');
+    const gridData = document.getElementById('gridData');
+    const ingredientsEl = document.getElementById('ingredients');
+    const allergensEl = document.getElementById('allergens');
+    const productUrl = document.getElementById('productUrl');
+    const lastFetched = document.getElementById('lastFetched');
+
+    let codeReader = null;
+    let usingBack = false;
+    let activeDeviceId = null;
+
+    function setStatus(text, isError = false) {
+      status.textContent = text;
+      status.style.color = isError ? '#ffb4ab' : '';
+    }
+
+    async function startScanner() {
+      if (codeReader) {
+        setStatus('Scanner already running.');
+        return;
+      }
+      codeReader = new BrowserMultiFormatReader();
+
+      setStatus('Starting camera…');
+
+      try {
+        // Prefer back camera when requested
+        const constraints = { video: { facingMode: usingBack ? { exact: "environment" } : "environment" } };
+        // Try to get a list of devices to pick a real back camera if available (improves reliability)
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoInputs = devices.filter(d => d.kind === 'videoinput');
+
+        if (videoInputs.length > 0) {
+          // If usingBack, try to find a device with "back" or "rear" in label, otherwise pick last device
+          const backCandidate = videoInputs.find(d => /back|rear|environment|rück|zadní|trasero/i.test(d.label));
+          if (usingBack && backCandidate) {
+            activeDeviceId = backCandidate.deviceId;
+          } else {
+            activeDeviceId = videoInputs[videoInputs.length - 1].deviceId;
+          }
+        } else {
+          activeDeviceId = null;
+        }
+
+        // If we have a specific device id, use decodeFromVideoDevice
+        if (activeDeviceId) {
+          await codeReader.decodeFromVideoDevice(activeDeviceId, video, (result, err) => {
+            if (result) {
+              onBarcodeScanned(result.getText());
+            }
+            // ignore NotFoundException — it's normal while scanning
+            if (err && !(err instanceof NotFoundException)) {
+              console.warn(err);
+            }
+          });
+        } else {
+          // fallback: let the library pick a device
+          await codeReader.decodeFromVideoDevice(null, video, (result, err) => {
+            if (result) onBarcodeScanned(result.getText());
+            if (err && !(err instanceof NotFoundException)) console.warn(err);
+          });
+        }
+
+        video.style.display = '';
+        videoFallback.style.display = 'none';
+        setStatus('Scanning — point the camera at a barcode.');
+      } catch (e) {
+        console.error(e);
+        video.style.display = 'none';
+        videoFallback.style.display = '';
+        setStatus('Camera unavailable. Use manual lookup.', true);
+        // If starting failed, clean up
+        if (codeReader) {
+          try { codeReader.reset(); } catch(_) {}
+          codeReader = null;
+        }
+      }
+    }
+
+    function stopScanner() {
+      if (!codeReader) {
+        setStatus('Scanner not running.');
+        return;
+      }
+      try {
+        codeReader.reset();
+      } catch (e) {
+        console.warn('Error stopping reader', e);
+      }
+      codeReader = null;
+      setStatus('Scanner stopped.');
+    }
+
+    let lastScanned = null;
+    let throttle = false;
+
+    async function onBarcodeScanned(code) {
+      // Avoid firing repeatedly for the same code in rapid succession
+      if (throttle) return;
+      throttle = true;
+      setTimeout(() => throttle = false, 1200);
+
+      // Clean up whitespace and non-digit characters except when barcode includes letters (rare)
+      const clean = (typeof code === 'string') ? code.trim() : String(code);
+      if (!clean) return;
+      if (clean === lastScanned) {
+        setStatus(`Seen ${clean} already.`); 
+        return;
+      }
+      lastScanned = clean;
+      setStatus(`Scanned: ${clean}`);
+      await lookupBarcode(clean);
+    }
+
+    async function lookupBarcode(barcode) {
+      // Validity: the API will respond; we perform the fetch and display result.
+      setStatus(`Fetching product ${barcode}…`);
+      showEmpty(false);
+      try {
+        const resp = await fetch(`https://world.openfoodfacts.org/api/v0/product/${encodeURIComponent(barcode)}.json`);
+        if (!resp.ok) {
+          setStatus(`OpenFoodFacts returned HTTP ${resp.status}.`, true);
+          showEmpty(true);
+          return;
+        }
+        const json = await resp.json();
+        if (!json || json.status !== 1 || !json.product) {
+          setStatus(`Product ${barcode} not found.`, true);
+          showEmpty(true);
+          return;
+        }
+        renderProduct(json.product, barcode);
+        setStatus(`Loaded product ${barcode}.`);
+        lastFetched.textContent = new Date().toLocaleString('en-GB', { timeZone: 'Europe/Berlin' });
+      } catch (err) {
+        console.error(err);
+        setStatus('Network or CORS error while fetching product.', true);
+        showEmpty(true);
+      }
+    }
+
+    function showEmpty(isEmpty) {
+      emptyState.style.display = isEmpty ? '' : 'none';
+      productCard.style.display = isEmpty ? 'none' : '';
+      if (isEmpty) {
+        productImage.src = '';
+        productTitle.textContent = '';
+        brandRow.textContent = '';
+        badges.innerHTML = '';
+        gridData.innerHTML = '';
+        ingredientsEl.textContent = '';
+        allergensEl.textContent = '';
+        productUrl.href = '#';
+      }
+    }
+
+    function helpN(format) {
+      // safe accessor for nested nutriments (avoids exceptions)
+      return format ?? '—';
+    }
+
+    function renderProduct(p, barcode) {
+      // Choose a best image
+      const image = p.image_front_small_url || p.image_front_url || p.image_small_url || p.image_url || '';
+      productImage.src = image || '';
+      productImage.alt = p.product_name || p.generic_name || 'Product image';
+
+      const title = p.product_name || p.generic_name || p.brands || `Product ${barcode}`;
+      productTitle.textContent = title;
+      brandRow.textContent = [p.brands, p.quantity].filter(Boolean).join(' • ');
+
+      // Badges: nutriscore, ecoscore, nova group
+      badges.innerHTML = '';
+      if (p.nutrition_grade_fr || p.nutri_score || p.nutriscore) {
+        const ns = p.nutrition_grade_fr || p.nutri_score || p.nutriscore;
+        appendBadge('Nutri-Score: ' + ns.toString().toUpperCase());
+      }
+      if (p.ecoscore_grade) appendBadge('Eco-score: ' + p.ecoscore_grade.toString().toUpperCase());
+      if (p.nova_group) appendBadge('NOVA group: ' + p.nova_group);
+      // A simple "health score" derived (prefer explicit values if present)
+      const nutritionScore = p.nutriments && (p.nutriments['nutrition-score-fr_100g'] ?? p.nutriments['nutrition-score-uk_100g']);
+      if (typeof nutritionScore !== 'undefined') {
+        appendBadge('Nutrition score (per 100g): ' + nutritionScore);
+      }
+
+      // Grid: show some useful kv pairs
+      gridData.innerHTML = '';
+      addKV('Brand(s)', p.brands);
+      addKV('Quantity', p.quantity);
+      addKV('Categories', p.categories);
+      addKV('Countries', p.countries);
+      addKV('Labels', p.labels);
+      // Nutriments: energy, fat, sugars, salt (per 100g)
+      if (p.nutriments) {
+        addKV('Energy (kcal/100g)', helpN(p.nutriments['energy-kcal_100g'] ?? p.nutriments['energy-kcal']));
+        addKV('Fat (g/100g)', helpN(p.nutriments['fat_100g']));
+        addKV('Sugars (g/100g)', helpN(p.nutriments['sugars_100g']));
+        addKV('Salt (g/100g)', helpN(p.nutriments['salt_100g'] ?? p.nutriments['sodium_100g']));
+      }
+
+      ingredientsEl.textContent = p.ingredients_text || 'Ingredients: not available';
+      allergensEl.textContent = p.allergens ? ('Allergens: ' + p.allergens) : '';
+      productUrl.href = p.url || `https://world.openfoodfacts.org/product/${barcode}`;
+      productUrl.textContent = 'Open on Open Food Facts';
+    }
+
+    function appendBadge(text) {
+      const el = document.createElement('div');
+      el.className = 'badge';
+      el.textContent = text;
+      badges.appendChild(el);
+    }
+
+    function addKV(k, v) {
+      const box = document.createElement('div');
+      box.className = 'kv';
+      const key = document.createElement('b');
+      key.textContent = k;
+      const val = document.createElement('div');
+      val.textContent = v ? (Array.isArray(v) ? v.join(', ') : v) : '—';
+      box.appendChild(key);
+      box.appendChild(val);
+      gridData.appendChild(box);
+    }
+
+    // UI bindings
+    startBtn.addEventListener('click', async () => {
+      usingBack = false;
+      await startScanner();
+    });
+
+    stopBtn.addEventListener('click', () => {
+      stopScanner();
+    });
+
+    flipBtn.addEventListener('click', async () => {
+      usingBack = !usingBack;
+      setStatus(usingBack ? 'Switching to back camera…' : 'Switching camera…');
+      if (codeReader) {
+        stopScanner();
+        // small delay to allow devices to settle
+        setTimeout(startScanner, 300);
+      } else {
+        setStatus('Camera will use back camera on next Start.');
+      }
+    });
+
+    manualLookup.addEventListener('click', () => {
+      const code = manualInput.value.trim();
+      if (!code) {
+        setStatus('Type a barcode first.', true);
+        return;
+      }
+      onBarcodeScanned(code);
+    });
+
+    manualInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        manualLookup.click();
+      }
+    });
+
+    // Clean up on page unload
+    window.addEventListener('beforeunload', () => {
+      if (codeReader) {
+        try { codeReader.reset(); } catch(_) {}
+      }
+    });
+
+    // initial state
+    showEmpty(true);
+    setStatus('Ready.');
+  </script>
+</body>
+</html>
