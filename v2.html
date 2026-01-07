@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<title>GTIN Barcode Scanner</title>
+<title>GTIN Barcode Scanner (CORS Proxy)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
@@ -61,7 +61,7 @@ button:disabled {
 <body>
 
 <header>
-GTIN Barcode Scanner (GTINhub – ohne API-Key)
+GTIN Barcode Scanner (GTINhub via corsproxy.io)
 </header>
 
 <div id="scanner"></div>
@@ -78,7 +78,9 @@ GTIN Barcode Scanner (GTINhub – ohne API-Key)
 <script src="https://unpkg.com/quagga@0.12.1/dist/quagga.min.js"></script>
 
 <script>
-const BASE_URL = "https://gtinhub.com/api/v1/product/";
+const GTINHUB_BASE = "https://gtinhub.com/api/v1/product/";
+const CORS_PROXY = "https://corsproxy.io/?";
+
 let lastCode = null;
 
 const output = document.getElementById("output");
@@ -128,11 +130,18 @@ async function onDetected(result) {
     if (code === lastCode) return;
     lastCode = code;
 
+    const targetUrl = GTINHUB_BASE + code;
+    const proxiedUrl = CORS_PROXY + encodeURIComponent(targetUrl);
+
     output.textContent =
-        "Barcode erkannt: " + code + "\n\nLade Produktdaten...";
+        "Barcode erkannt: " + code +
+        "\n\nRequest:\n" + targetUrl +
+        "\n\nLade Produktdaten...";
 
     try {
-        const response = await fetch(BASE_URL + encodeURIComponent(code));
+        const response = await fetch(proxiedUrl, {
+            method: "GET"
+        });
 
         if (!response.ok) {
             throw new Error("HTTP " + response.status);
